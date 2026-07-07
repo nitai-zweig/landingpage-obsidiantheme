@@ -85,12 +85,12 @@
   // running total crosses the threshold. The accumulator resets after
   // any pause between events, so unrelated later scrolls don't inherit
   // leftover total from a previous gesture.
-  // Bumped up from 55: at 55, a single notch of a plain mouse wheel (which
-  // typically reports a deltaY around 100) blew straight through the
-  // threshold and jumped a page on the lightest possible input, which read
-  // as way too aggressive/twitchy on desktop. This requires a more
-  // deliberate scroll or wheel turn before committing to a page jump.
-  var WHEEL_THRESHOLD = 90;
+  // Bumped up from 55, then again from 90: even at 90 a single moderate
+  // wheel/trackpad flick was still enough to blow through the threshold
+  // and jump a page, which still read as too aggressive/violent on
+  // desktop. This requires a clearly deliberate scroll before committing
+  // to a page jump.
+  var WHEEL_THRESHOLD = 160;
   var WHEEL_GESTURE_GAP_MS = 160;
   var wheelAccum = 0;
   var lastWheelAt = 0;
@@ -204,7 +204,7 @@
     )
       return;
     var dy = startY - e.changedTouches[0].clientY;
-    if (Math.abs(dy) < 60) return;
+    if (Math.abs(dy) < 60) return; // ignore small taps/drags
     if (dy > 0) goTo(current + 1);
     else goTo(current - 1);
   }
@@ -219,6 +219,8 @@
     applyTransform();
   });
 
+  // Route in-page nav links (Get Updates -> #signup, How it works ->
+  // #how) through the same page jump instead of an instant native jump.
   document.querySelectorAll('a[href^="#"]').forEach(function (a) {
     a.addEventListener("click", function (e) {
       var id = a.getAttribute("href").slice(1);
