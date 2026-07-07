@@ -141,4 +141,96 @@
   // overscroll for the rest of that same touch sequence even if a later
   // event isn't prevented. So the decision has to be made once, right
   // when the gesture direction locks in, not adjusted based on distance
-  // as 
+  // as the drag continues.
+  //
+  // The gesture is only genuinely ambiguous with refresh when we're
+  // already on the first page and dragging downward — that's the only
+  // place a pull can reach the top with nowhere left for our own paging
+  // to go. In that one case we never call preventDefault at all and let
+  // the browser own the whole gesture: a small pull just rubber-bands
+  // back (our page-nav would have been a no-op here anyway, since
+  // goTo(current - 1) already clamps at 0), and a hard pull triggers a
+  // real refresh, exactly like any other page. Every other vertical drag
+  // (mid-pager, or dragging upward from the first page) keeps using our
+  // own preventDefault + paging, since there's no legitimate native
+  // scroll there for the browser to fight us over.
+  var touchStartX = null;
+  var touchStartY = null;
+  var touchDirection = null; // 'vertical' | 'horizontal' | null
+  var pageAtTouchStart = 0;
+  var isPullToRefreshGesture = false;
+
+  function onTouchStart(e) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchDirection = null;
+    pageAtTouchStart = current;
+    isPullToRefreshGesture = false;
+  }
+
+  function onTouchMove(e) {
+    if (touchStartY === null) return;
+    var t = e.touches[0];
+    var dx = t.clientX - touchStartX;
+    var dy = t.clientY - touchStartY;
+
+    if (touchDirection === null) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      touchDirection = Math.abs(dy) > Math.abs(dx) ? "vertical" : "horizontal";
+      if (touchDirection === "vertical") {
+        isPullToRefreshGesture = pageAtTouchStart === 0 && dy > 0;
+      }
+    }
+
+    if (touchDirection === "vertical" && !isPullToRefreshGesture && e.cancelable) {
+      e.preventDefault();
+    }
+  }
+
+  function onTouchEnd(e) {
+    var direction = touchDirection;
+    var startY = touchStartY;
+    var wasRefreshGesture = isPullToRefreshGesture;
+    touchStartX = null;
+    touchStartY = null;
+    touchDirection = null;
+    isPullToRefreshGesture = false;
+
+    if (
+      startY === null ||
+      isAnimating ||
+      direction !== "vertical" ||
+      wasRefreshGesture
+    )
+      return;
+    var dy = startY - e.changedTouches[0].clientY;
+    if (Math.abs(dy) < 60) return;
+    if (dy > 0) goTo(current + 1);
+    else goTo(current - 1);
+  }
+
+  window.addEventListener("wheel", onWheel, { passive: false });
+  window.addEventListener("keydown", onKeydown);
+  window.addEventListener("touchstart", onTouchStart, { passive: true });
+  window.addEventListener("touchmove", onTouchMove, { passive: false });
+  window.addEventListener("touchend", onTouchEnd, { passive: true });
+  window.addEventListener("resize", function () {
+    vh = window.innerHeight;
+    applyTransform();
+  });
+
+  document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+    a.addEventListener("click", function (e) {
+      var id = a.getAttribute("href").slice(1);
+      var idx = pages.findIndex(function (el) {
+        return el.id === id;
+      });
+      if (idx !== -1) {
+        e.preventDefault();
+        goTo(idx);
+      }
+    });
+  });
+
+  updateDots();
+})();
